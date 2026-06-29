@@ -1,0 +1,116 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block content %}
+
+<div class="row">
+
+    <div class="col-lg-3">
+
+        <div class="card dashboard-card">
+
+            <h5>Camera</h5>
+
+            <h2>1</h2>
+
+        </div>
+
+    </div>
+
+    <div class="col-lg-3">
+
+        <div class="card dashboard-card">
+
+            <h5>Alerts</h5>
+
+            <h2>0</h2>
+
+        </div>
+
+    </div>
+
+    <div class="col-lg-3">
+
+        <div class="card dashboard-card">
+
+            <h5>Status</h5>
+
+            <h2 class="text-success">
+
+                Safe
+
+            </h2>
+
+        </div>
+
+    </div>
+
+    <div class="col-lg-3">
+
+        <div class="card dashboard-card">
+
+            <h5>Monitoring</h5>
+
+            <h2>
+
+                Active
+
+            </h2>
+
+        </div>
+
+    </div>
+
+</div>
+
+<br>
+
+<div class="row">
+
+<div class="col-lg-8">
+
+<div class="card p-3">
+
+<h4>
+
+📹 Live Camera
+
+</h4>
+
+<div class="camera-box">
+
+Live Stream Coming Soon
+
+</div>
+
+</div>
+
+</div>
+
+<div class="col-lg-4">
+
+<div class="card p-3">
+
+<h4>
+
+Recent Alerts
+
+</h4>
+
+<hr>
+
+<p>
+
+No alerts detected.
+
+</p>
+
+</div>
+
+</div>
+
+</div>
+<a href="{% url 'create_room' %}" class="btn btn-primary mb-3">
+    <i class="bi bi-plus-circle"></i>
+    Create Monitoring Room
+</a>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block content %}
+
+<div class="container">
+
+    <div class="card shadow p-4">
+
+        <h2>{{ room.room_name }}</h2>
+
+        <hr>
+
+        <h4>Room Code</h4>
+
+        <div class="alert alert-success">
+
+            <h2>{{ room.room_code }}</h2>
+
+        </div>
+
+        <p>Share this room code with the camera phone.</p>
+
+        <div class="mt-4">
+
+                    <a
+            href="{% url 'parent_view' room.room_code %}"
+            class="btn btn-primary">
+
+            Parent Mode
+
+            </a>
+
+                    <a
+            href="{% url 'camera_view' room.room_code %}"
+            class="btn btn-success">
+
+            Camera Mode
+
+            </a>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

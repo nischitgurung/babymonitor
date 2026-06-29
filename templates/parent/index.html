@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Parent Monitor</title>
+</head>
+<body>
+
+<h2>Parent View</h2>
+
+<video id="video" autoplay playsinline style="width: 500px; border: 2px solid black;"></video>
+
+<script>
+const room = "{{ room_code }}";
+
+let peer;
+
+async function startConnection() {
+
+    peer = new RTCPeerConnection({
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" }
+        ]
+    });
+
+    // RECEIVE STREAM
+    peer.ontrack = (event) => {
+        document.getElementById("video").srcObject = event.streams[0];
+    };
+
+    // 🔥 ICE CANDIDATES FROM PARENT
+    peer.onicecandidate = async (event) => {
+        if (event.candidate) {
+            await fetch("/signal/answer/", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    room: room,
+                    candidate: event.candidate
+                })
+            });
+        }
+    };
+
+    let interval = setInterval(async () => {
+
+        const res = await fetch(`/signal/offer/${room}/`);
+        const data = await res.json();
+
+        if (data.offer) {
+            clearInterval(interval);
+
+            await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+            const answer = await peer.createAnswer();
+            await peer.setLocalDescription(answer);
+
+            await fetch("/signal/answer/", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    room: room,
+                    answer: peer.localDescription
+                })
+            });
+        }
+    }, 1000);
+}
+</script>
+
+</body>
+</html>
