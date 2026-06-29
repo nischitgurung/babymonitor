@@ -4,7 +4,11 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from .models import Room
-
+from django.http import JsonResponse
+from .models import Alert
+from .motion_detector import MotionDetector
+# Global registry
+motion_detectors = {}
 def home(request):
 
     return render(request, "home.html")
@@ -79,3 +83,26 @@ def parent_view(request, room_code):
             "room": room
         }
     )
+@login_required
+def camera_view(request, room_code):
+    room = get_object_or_404(Room, room_code=room_code)
+    
+    # Temporarily disable auto motion detection to avoid conflict
+    # if room_code in motion_detectors:
+    #     motion_detectors[room_code].stop()
+    
+    return render(request, "camera/index.html", {"room": room})
+@login_required
+def get_alerts(request, room_code):
+    """API to fetch latest alerts for parent dashboard"""
+    room = get_object_or_404(Room, room_code=room_code)
+    alerts = Alert.objects.filter(room=room).order_by('-timestamp')[:10]
+    
+    data = [{
+        'id': alert.id,
+        'timestamp': alert.timestamp.strftime('%H:%M:%S'),
+        'message': alert.message or 'Motion detected',
+        'image': alert.image.url if alert.image else None
+    } for alert in alerts]
+    
+    return JsonResponse({'alerts': data})

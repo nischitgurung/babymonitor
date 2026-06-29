@@ -19,3 +19,17 @@ class Room(models.Model):
 
     def __str__(self):
         return f"{self.room_name} ({self.room_code})"
+
+
+class Alert(models.Model):
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="alerts")
+    timestamp = models.DateTimeField(auto_now_add=True)
+    alert_type = models.CharField(max_length=50, default="motion")
+    message = models.TextField(blank=True)
+    image = models.ImageField(upload_to='alerts/', null=True, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Alert in {self.room} at {self.timestamp.strftime('%H:%M:%S')}"

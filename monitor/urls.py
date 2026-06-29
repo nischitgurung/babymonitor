@@ -17,4 +17,5 @@ urlpatterns = [
     views.parent_view,
     name="parent_view",
 ),
+    path('alerts/<str:room_code>/', views.get_alerts, name='get_alerts'),
 ]
