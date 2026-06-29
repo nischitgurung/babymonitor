@@ -3,31 +3,14 @@
 <head>
     <title>Camera - Baby Monitor</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            text-align: center; 
-            background: #f4f4f4;
-            margin: 0;
-            padding: 20px;
-        }
-        video { 
-            max-width: 100%; 
-            border: 4px solid #4CAF50; 
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
-        #status { 
-            padding: 12px; 
-            margin: 15px auto; 
-            max-width: 500px;
-            border-radius: 8px;
-            font-weight: bold;
-        }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
+        video { max-width: 100%; border: 4px solid #4CAF50; border-radius: 12px; }
+        #status { padding: 12px; margin: 15px auto; max-width: 600px; border-radius: 8px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h2>📹 Baby Camera Live</h2>
-    <div id="status">Initializing camera...</div>
+    <h2>📹 Baby Camera</h2>
+    <div id="status">Initializing...</div>
     <video id="localVideo" autoplay playsinline muted></video>
     <br><br>
     <button onclick="stopCamera()">Stop Camera</button>
@@ -35,57 +18,70 @@
 <script>
 const room = "{{ room.room_code }}";
 let localStream = null;
+let peer = null;
+
+const config = {
+    iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+    ]
+};
 
 async function startCamera() {
     const statusEl = document.getElementById("status");
-    if (!statusEl) {
-        console.error("Status element not found!");
-        return;
-    }
-
-    statusEl.textContent = "Requesting camera permission...";
-    statusEl.style.backgroundColor = "#fff3cd";
+    statusEl.textContent = "Requesting camera...";
 
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-            }, 
-            audio: false 
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        document.getElementById("localVideo").srcObject = localStream;
+
+        peer = new RTCPeerConnection(config);
+
+        localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+
+        peer.onicecandidate = async (event) => {
+            if (event.candidate) {
+                await fetch("/signal/signal/", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ room, candidate: event.candidate, side: "camera" })
+                });
+            }
+        };
+
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+
+        await fetch("/signal/signal/", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ room, offer: peer.localDescription })
         });
 
-        const videoEl = document.getElementById("localVideo");
-        videoEl.srcObject = localStream;
-        
-        statusEl.textContent = "✅ Camera Active - Live Feed";
-        statusEl.style.backgroundColor = "#d4edda";
-        
-        console.log("✅ Camera started successfully for room:", room);
-        
-        // Start WebRTC after camera is ready
-        initWebRTC();
+        console.log("✅ Offer sent to signaling server");
+        statusEl.textContent = "✅ Camera Live - Waiting for Parent";
+
+        waitForAnswer();
 
     } catch (err) {
-        console.error("Camera Error:", err);
-        statusEl.innerHTML = `❌ ${err.name}<br><small>${err.message}</small>`;
-        statusEl.style.backgroundColor = "#f8d7da";
+        console.error(err);
+        statusEl.textContent = "❌ " + err.message;
     }
+}
+
+async function waitForAnswer() {
+    setInterval(async () => {
+        const res = await fetch(`/signal/answer/${room}/`);
+        const data = await res.json();
+        if (data.answer && peer) {
+            await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log("✅ Connection Established!");
+        }
+    }, 1000);
 }
 
 function stopCamera() {
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-    }
-    const statusEl = document.getElementById("status");
-    if (statusEl) statusEl.textContent = "Camera stopped";
-}
-
-// Initialize WebRTC (add your peer code here)
-function initWebRTC() {
-    console.log("WebRTC initialization started...");
-    // Paste your peer connection code here later
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
 }
 
 window.onload = startCamera;
