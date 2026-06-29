@@ -1,66 +1,82 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Camera</title>
-</head>
+<head><title>Camera</title></head>
 <body>
-
 <h2>Camera Mode</h2>
-
-<video id="video" autoplay playsinline style="width: 400px;"></video>
+<video id="localVideo" autoplay playsinline muted style="width: 400px;"></video>
 
 <script>
-const room = "{{ room_code }}";
+const room = "{{ room.room_code }}";  // or {{ room_code }}
 let peer;
-let stream;
+let localStream;
 
-const servers = {
+const config = {
     iceServers: [
-        { urls: "stun:stun.l.google.com:19302" }
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
     ]
 };
 
 async function startCamera() {
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        document.getElementById("localVideo").srcObject = localStream;
 
-    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    document.getElementById("video").srcObject = stream;
+        peer = new RTCPeerConnection(config);
 
-    peer = new RTCPeerConnection(servers);
+        localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
 
-    // ADD TRACKS
-    stream.getTracks().forEach(track => {
-        peer.addTrack(track, stream);
-    });
+        peer.onicecandidate = async (event) => {
+            if (event.candidate) {
+                await fetch("/signal/signal/", {  // Unified
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ room, candidate: event.candidate, side: "camera" })
+                });
+            }
+        };
 
-    // 🔥 SEND ICE CANDIDATES
-    peer.onicecandidate = async (event) => {
-        if (event.candidate) {
-            await fetch("/signal/offer/", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    room: room,
-                    candidate: event.candidate
-                })
-            });
-        }
-    };
+        // Create and send offer
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
+        await fetch("/signal/signal/", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ room, offer: peer.localDescription })
+        });
 
-    await fetch("/signal/offer/", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            room: room,
-            offer: peer.localDescription
-        })
-    });
-
-    waitForAnswer();
+        waitForAnswerAndCandidates();
+    } catch (err) {
+        console.error("Camera error:", err);
+    }
 }
-</script>
 
+async function waitForAnswerAndCandidates() {
+    // Poll for answer
+    const answerInterval = setInterval(async () => {
+        const res = await fetch(`/signal/answer/${room}/`);
+        const data = await res.json();
+        if (data.answer) {
+            clearInterval(answerInterval);
+            await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log("Answer received and set");
+        }
+    }, 800);
+
+    // Poll for parent candidates
+    setInterval(async () => {
+        if (!peer) return;
+        const res = await fetch(`/signal/candidates/${room}/parent/`);
+        const data = await res.json();
+        for (const cand of (data.candidates || [])) {
+            await peer.addIceCandidate(new RTCIceCandidate(cand));
+        }
+    }, 1000);
+}
+
+// Auto-start
+window.onload = startCamera;
+</script>
 </body>
 </html>

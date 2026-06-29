@@ -1,71 +1,67 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Parent Monitor</title>
-</head>
+<head><title>Parent Monitor</title></head>
 <body>
-
 <h2>Parent View</h2>
-
-<video id="video" autoplay playsinline style="width: 500px; border: 2px solid black;"></video>
+<video id="remoteVideo" autoplay playsinline style="width: 500px; border: 2px solid black;"></video>
 
 <script>
-const room = "{{ room_code }}";
-
+const room = "{{ room.room_code }}";
 let peer;
 
-async function startConnection() {
+const config = { iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }] };
 
-    peer = new RTCPeerConnection({
-        iceServers: [
-            { urls: "stun:stun.l.google.com:19302" }
-        ]
-    });
+async function startParent() {
+    peer = new RTCPeerConnection(config);
 
-    // RECEIVE STREAM
     peer.ontrack = (event) => {
-        document.getElementById("video").srcObject = event.streams[0];
+        document.getElementById("remoteVideo").srcObject = event.streams[0];
     };
 
-    // 🔥 ICE CANDIDATES FROM PARENT
     peer.onicecandidate = async (event) => {
         if (event.candidate) {
-            await fetch("/signal/answer/", {
+            await fetch("/signal/signal/", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    room: room,
-                    candidate: event.candidate
-                })
+                body: JSON.stringify({ room, candidate: event.candidate, side: "parent" })
             });
         }
     };
 
-    let interval = setInterval(async () => {
-
+    // Poll for offer
+    const offerInterval = setInterval(async () => {
         const res = await fetch(`/signal/offer/${room}/`);
         const data = await res.json();
-
         if (data.offer) {
-            clearInterval(interval);
-
+            clearInterval(offerInterval);
+            
             await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-
+            
             const answer = await peer.createAnswer();
             await peer.setLocalDescription(answer);
-
-            await fetch("/signal/answer/", {
+            
+            await fetch("/signal/signal/", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    room: room,
-                    answer: peer.localDescription
-                })
+                body: JSON.stringify({ room, answer: peer.localDescription })
             });
+            
+            console.log("Answer sent");
+        }
+    }, 800);
+
+    // Poll for camera candidates
+    setInterval(async () => {
+        if (!peer) return;
+        const res = await fetch(`/signal/candidates/${room}/camera/`);
+        const data = await res.json();
+        for (const cand of (data.candidates || [])) {
+            try { await peer.addIceCandidate(new RTCIceCandidate(cand)); } catch(e) {}
         }
     }, 1000);
 }
-</script>
 
+window.onload = startParent;
+</script>
 </body>
 </html>
